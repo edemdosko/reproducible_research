@@ -1,0 +1,143 @@
+---
+title: "Reproducible Research Project 1"
+author: "Edem Dossou"
+date: "May 7, 2016"
+output: html_document
+---
+
+
+## Loading the data
+
+```{r, echo=TRUE}
+pacman::p_load(dplyr, data.table, lubridate, ggplot2, plotly,dygraphs)
+
+#read in the data
+dt <- fread("activity.csv")
+dt$date <- ymd(dt$date)
+#Let's explore the data by checking a quick summary, its structure and its dimensions
+dims <- dim(dt) ; summary(dt); class(dt)
+dims
+```
+
+## Mean total number of steps taken daily 
+
+```{r, echo=TRUE}
+#Total number of steps per day
+steps.tot <- dt %>%
+                     group_by(date) %>%
+                     summarize(steps = sum(steps)) %>% 
+                     na.omit 
+steps.tot 
+
+#Histogram of the total number of steps taken per day
+p <- ggplot(data = steps.tot, aes(x=steps)) + 
+        geom_histogram(binwidth = 2000, fill ="#0072B2") + 
+        xlab("Daily number of steps") + ylab("Daily Frequency") + labs(title= "Total numbers of Steps per day") +
+        theme_bw()
+p <- ggplotly(p)
+p
+
+# Mean and median of the total number of steps taken per day summarized in a table
+mm.dt <- data.table(mean.steps = mean(steps.tot$steps), median.steps = median(steps.tot$steps))
+mm.dt
+```
+
+## Average daily activity pattern
+
+```{r, echo=TRUE}
+#get the time series data
+ts.steps <- dt %>% 
+                  filter(!is.na(steps)) %>%
+                  group_by(interval) %>% 
+                  summarize(steps = sum(steps))
+ts.steps
+
+#plot the time-series
+dygraph(ts.steps) %>% dyRangeSelector()
+
+#Interval with the maximum number of steps
+int.val <- ts.steps[which.max(ts.steps$steps), ]$interval
+int.val
+```
+
+## Imputing missing values
+
+```{r, echo=TRUE}
+#report the number of missing values in the data
+tot.missing.vals <- sum(is.na(dt))
+#Strategy for imputing the dataset - replacing missing values with meadian (steps and intervals)
+imput.dt <- dt %>%
+                 group_by(interval) %>%
+                 mutate(steps = ifelse(is.na(steps),median(steps, na.rm = TRUE), steps))
+summary(imput.dt)
+
+#Total number of steps per day
+steps.tot1 <- imput.dt %>%
+        group_by(date) %>%
+        summarize(steps = sum(steps))
+steps.tot1 
+
+#Histogram of the total number of steps taken per day               
+g <- ggplot(data = steps.tot1, aes(x=steps)) + 
+        geom_histogram(binwidth = 2000, fill ="#CC79A7") + 
+        xlab("Daily number of steps") + ylab("Daily Frequency") + labs(title= "Total numbers of Steps per day") +
+        theme_bw()
+g <- ggplotly(g)
+g
+
+# Mean and median of the total number of steps taken per day summarized in a table
+mm.dt2 <- data.table(mean.steps = mean(steps.tot1$steps), median.steps = median(steps.tot1$steps))
+mm.dt2
+
+#Function to return differences in the original and imputed steps 
+sum_diff <- function(x,y) {
+        diff.int <- summary(x) - summary(y)
+        diff.bool <- all.equal(summary(x), summary(y))
+        result <- list(difference = diff.int, equality = diff.bool)
+        
+        return(result)
+}
+```
+
+There has been a 9.5% increase in the steps value given my strategy - filling missing steps with the median of the steps
+
+```{r, echo=TRUE}
+sum_diff(steps.tot$steps, steps.tot1$steps)
+```
+
+## Comparing weekdays and weekends activity pattern
+
+Creating a factor varaible to convert with values the days of the week given a date and make panel plots for weekdays and weekends
+
+```{r, echo=TRUE}
+#creating a factor varaible to convert with values the days of the week given a date
+imput.dt$days <- weekdays(imput.dt$date)
+imput.dt <- imput.dt %>% 
+            mutate(days_bin=ifelse(days %in% c("Friday","Monday","Thursday","Tuesday","Wednesday"), "weekday", "weekend"))
+imput.dt$days_bin <- factor(imput.dt$days_bin)
+
+#Make panel plots for weekdays and weekends
+ts.steps2 <- imput.dt %>% 
+        filter(days_bin %in% c("weekday","weekend")) %>%
+        group_by(days_bin, interval) %>% 
+        summarize(steps = mean(steps))
+ts.steps2
+
+#plots      
+h <- ggplot(ts.steps2, aes(x=interval, y=steps)) +
+                geom_line(aes(y = steps, colour = "mean"), size = .5) + 
+                scale_colour_manual(name='', values=c("mean"="turquoise")) +
+                facet_wrap(~days_bin, nrow=2) + 
+                theme_bw() + theme(legend.position="none")
+h <- ggplotly(h)
+h
+
+```
+
+
+
+
+
+
+
+
